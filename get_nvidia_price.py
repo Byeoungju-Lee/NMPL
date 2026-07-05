@@ -33,14 +33,14 @@ def get_nvidia_quote() -> dict:
         "close": float(latest["Close"]),
         "volume": int(latest["Volume"]),
     }
-def get_nvidia_data(month) -> pd.DataFrame:
+def get_nvidia_data(month, Ticker) -> pd.DataFrame:
     # month = float(input('Enter the month what you want to get the Ticker data (ex: 5): '))
     end_date = datetime.now()
 
     start_date = end_date - timedelta(days = 30*month)
     end_date = end_date.strftime("%Y-%m-%d")
     start_data = start_date.strftime("%Y-%m-%d")
-    df = yf.download(yf.Ticker(input('Enter the Ticker you want to get the data (ex: NVDA): ')).info['symbol'], start=start_date, end=end_date, interval='1d').sort_index(ascending=True)
+    df = yf.download(yf.Ticker(Ticker).info['symbol'], start=start_date, end=end_date, interval='1d').sort_index(ascending=True)
     # 2. 이동평균선(SMA) 및 볼린저 밴드 계산
     period = 30  # 기준 기간 (보통 20일을 가장 많이 씁니다)
 
@@ -56,7 +56,14 @@ def get_nvidia_data(month) -> pd.DataFrame:
     # 하단 밴드 = 중심선 - (표준편차 * 2)
     df['Lower_Band'] = df['MA30'] - (df['STD30'] * 2)
     df = df.reset_index()
-    df.to_excel('nvidia_price.xlsx', index=False)  # Save to Excel
+    df = df.sort_values(by='Date', ascending=False)
+    # MultiIndex 컬럼이 있다면 평탄화
+    df.columns = [
+        "_".join(col).strip() if isinstance(col, tuple) else col
+        for col in df.columns
+    ]
+    df.to_csv('nvidia_price.csv', index=False)  # Save to CSV
+
     return df
 
 def get_datacenter_ppi(month) -> pd.DataFrame:
@@ -95,7 +102,8 @@ def get_datacenter_ppi(month) -> pd.DataFrame:
         # 4. Pandas DataFrame 변환
         df_ppi = pd.DataFrame(data[1:], columns=data[0])
         df_center = df_ppi[((df_ppi['category_code'] == 'A14XX')) & (df_ppi['data_type_code'] == 'P')] #office 투자비율(전월대비) datacenter 포함금액
-        df_center.to_excel('datacenter_ppi.xlsx', index=False)  # Save to Excel
+        df_center = df_center.sort_values(by='time', ascending=False)
+        df_center.to_csv('datacenter_ppi.csv', index=False)  # Save to CSV
         # print(df_ppi.head())
     else:
         print(f"Error: {response.status_code}")
@@ -138,7 +146,8 @@ if __name__ == "__main__":
     plt.savefig('datacenter_ppi.png')
 
     # 2. 시각화를 위해 인덱스(날짜)를 숫자로 다루기 편하게 리셋
-    df_reset = get_nvidia_data(month)
+    Ticker = input('Enter the Ticker you want to get the data (ex: NVDA): ')
+    df_reset = get_nvidia_data(month, Ticker)
     # ----------------------------------------------------
     # 1. 그래프 도화지 그리기
     fig, ax = plt.subplots(figsize=(14, 7))
@@ -147,10 +156,10 @@ if __name__ == "__main__":
     for i in range(len(df_reset)):
         row = df_reset.iloc[i]
 
-        open_val = row['Open'].item()
-        high_val = row['High'].item()
-        low_val = row['Low'].item()
-        close_val = row['Close'].item()
+        open_val = row[f'Open_{Ticker}'].item()
+        high_val = row[f'High_{Ticker}'].item()
+        low_val = row[f'Low_{Ticker}'].item()
+        close_val = row[f'Close_{Ticker}'].item()
 
         if close_val >= open_val:
             color = 'red'
@@ -169,26 +178,26 @@ if __name__ == "__main__":
     x_range = range(len(df_reset))
 
     # 30일 이동평균선 (중앙 점선 형태)
-    ax.plot(x_range, df_reset['MA30'], label='MA 30', color='orange', linewidth=1.5, linestyle='--')
+    ax.plot(x_range, df_reset['MA30_'], label='MA 30', color='orange', linewidth=1.5, linestyle='--')
 
     # 볼린저 밴드 상한선 및 하한선
-    ax.plot(x_range, df_reset['Upper_Band'], label='Upper Band', color='gray', linewidth=1, alpha=0.7)
-    ax.plot(x_range, df_reset['Lower_Band'], label='Lower Band', color='gray', linewidth=1, alpha=0.7)
+    ax.plot(x_range, df_reset['Upper_Band_'], label='Upper Band', color='gray', linewidth=1, alpha=0.7)
+    ax.plot(x_range, df_reset['Lower_Band_'], label='Lower Band', color='gray', linewidth=1, alpha=0.7)
 
     # 볼린저 밴드 내부 채우기 (alpha로 반투명도 조절)
-    ax.fill_between(x_range, df_reset['Lower_Band'], df_reset['Upper_Band'], color='gray', alpha=0.1)
+    ax.fill_between(x_range, df_reset['Lower_Band_'], df_reset['Upper_Band_'], color='gray', alpha=0.1)
 
     # ----------------------------------------------------
     # 4. 마무리 스타일링 및 축 설정
-    date_series = df_reset['Date']
+    date_series = df_reset['Date_']
     labels = date_series.dt.strftime('%Y-%m-%d') if hasattr(date_series, 'dt') else date_series.iloc[:, 0].dt.strftime('%Y-%m-%d')
 
     step = max(1, len(df_reset) // 10)
     ax.set_xticks(range(0, len(df_reset), step))
     ax.set_xticklabels(labels.iloc[::step], rotation=45)
 
-    plt.title("NVDA Candle Chart with Bollinger Bands & MA30")
+    plt.title(f"{Ticker} Candle Chart with Bollinger Bands & MA30")
     plt.grid(True, alpha=0.2)
     plt.legend(loc='upper left') # 범례 추가
     plt.tight_layout()
-    plt.show()
+    plt.savefig(f'{Ticker}_candle_chart.png')
