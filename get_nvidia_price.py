@@ -37,7 +37,7 @@ def get_nvidia_data(month, Ticker) -> pd.DataFrame:
     # month = float(input('Enter the month what you want to get the Ticker data (ex: 5): '))
     end_date = datetime.now()
 
-    start_date = end_date - timedelta(days = 30*month)
+    start_date = end_date - timedelta(days = 30*(month+4))
     end_date = end_date.strftime("%Y-%m-%d")
     start_data = start_date.strftime("%Y-%m-%d")
     df = yf.download(yf.Ticker(Ticker).info['symbol'], start=start_date, end=end_date, interval='1d').sort_index(ascending=True)
@@ -56,13 +56,13 @@ def get_nvidia_data(month, Ticker) -> pd.DataFrame:
     # 하단 밴드 = 중심선 - (표준편차 * 2)
     df['Lower_Band'] = df['MA30'] - (df['STD30'] * 2)
     df = df.reset_index()
-    df = df.sort_values(by='Date', ascending=False)
+    # df = df.sort_values(by='Date', ascending=False)
     # MultiIndex 컬럼이 있다면 평탄화
     df.columns = [
         "_".join(col).strip() if isinstance(col, tuple) else col
         for col in df.columns
     ]
-    df.to_csv('nvidia_price.csv', index=False)  # Save to CSV
+    df.to_csv(f'{Ticker}_price.csv', index=False)  # Save to CSV
 
     return df
 
@@ -128,7 +128,7 @@ if __name__ == "__main__":
 
     # 4. 꺾은선 그래프(Line Plot) 그리기
     plt.figure(figsize=(10, 5))
-    plt.plot(df_center['time'], df_center['cell_value'], marker='o', color='b', linestyle='-', linewidth=2)
+    plt.plot(df_center['time'], df_center['cell_value'].astype(float), marker='o', color='b', linestyle='-', linewidth=2)
 
     # 그래프 스타일 설정
     # plt.title("A14XX (Office) MoM Percent Change (P)", fontsize=14, pad=15)
